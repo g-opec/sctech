@@ -1,7 +1,7 @@
 """
 Mini-Projeto Avaliativo - Módulo 1 - Semana 07
 Disciplina: Visualização de Dados e Business Intelligence [T4]
-Aluno: Genez Jose de Mattos
+Aluno: Genez José de Mattos Junior
 
 Objetivo:
  Identificar problemas nos dados (valores nulos, tipos incorretos, duplicados), 
@@ -302,7 +302,7 @@ def normalizar_dados(df):
 
 folderScript = Path(__file__).resolve().parent
 
-# Aceita os dois nomes mais prováveis para facilitar a execução.
+# Aceita os três nomes mais prováveis para facilitar a execução.
 arquivos_candidatos = [
     folderScript / "Base Varejo.csv",
     folderScript / "BaseVarejo.csv",
