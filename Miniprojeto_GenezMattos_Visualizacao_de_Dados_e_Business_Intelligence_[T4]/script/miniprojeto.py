@@ -1,457 +1,41 @@
 """
-Mini-Projeto Avaliativo - Módulo 1 - Semana 07
+Mini-Projeto Avaliativo - Módulo 1 - Semana 07 (Versão Minimalista Sem Funções)
 Disciplina: Visualização de Dados e Business Intelligence [T4]
 Aluno: Genez José de Mattos Junior
-
-Objetivo:
- Identificar problemas nos dados (valores nulos, tipos incorretos, duplicados), 
- tratar esses problemas com ferramentas como pandas e gerar estatísticas simples e 
- funções de agrupamento, para responder perguntas operacionais 
- (quem compra mais, quais categorias vendem mais, como variam as vendas ao longo do tempo).
-
-
-Execução:
-    python MiniProjeto_GenezMattos_T4.py
-
-Dependência:
-    pandas
 """
 
 from pathlib import Path
 import pandas as pd
 import numpy as np
 
-# Função auxiliar para formatar números inteiros com separador de milhar-------------------------
-def fmt_int(valor):
-    return f"{int(valor):,}".replace(",", ".")
-
-
-# Função generica para limpar linhas e colunas vazias e linhas duplicadas do DataFrame-------------------------------
-def limpar_dados(df):
-  """Recebe um DataFrame e executa a limpeza estrutural inicial:
-  - Remove colunas 100% vazias.
-  - Remove linhas 100% vazias.
-  - Remove linhas duplicadas.
-  Retorna o DataFrame limpo.
-  """
-  # Cria uma cópia para evitar modificar o DataFrame original diretamente
-  df_clean = df.copy()
-
-  print(
-      f"Dimensões antes da limpeza: {df_clean.shape[0]} linhas,"
-      f" {df_clean.shape[1]} colunas."
-  )
-
-  # 1. Identifica e remove colunas totalmente vazias
-  colunas_vazias = [
-      col for col in df_clean.columns if df_clean[col].isna().all()
-  ]
-
-  if colunas_vazias:
-    print(f"Removendo {len(colunas_vazias)} coluna(s) totalmente vazia(s):")
-    for coluna in colunas_vazias:
-      print(f" - {coluna}")
-    df_clean = df_clean.drop(columns=colunas_vazias)
-  else:
-    print("Nenhuma coluna 100% vazia encontrada.")
-
-  # 2. Remove linhas totalmente vazias
-  linhas_antes = len(df_clean)
-  df_clean = df_clean.dropna(how="all")
-  linhas_removidas = linhas_antes - len(df_clean)
-
-  if linhas_removidas > 0:
-    print(f"Removidas {linhas_removidas} linha(s) totalmente vazia(s).")
-  else:
-    print("Nenhuma linha 100% vazia encontrada.")
-
-   # 3. Remove linhas duplicadas
-  linhas_duplicadas = df_clean.duplicated().sum()
-  print(f"Quantidade de linhas duplicadas: {linhas_duplicadas}")
-  if linhas_duplicadas > 0:
-      print(f"Removendo {linhas_duplicadas} linha(s) duplicada(s).") 
-      df_clean = df_clean.drop_duplicates()
-
-  print(
-      f"Dimensões após a limpeza: {df_clean.shape[0]} linhas,"
-      f" {df_clean.shape[1]} colunas.\n"
-  )
-  return df_clean
-
-
-# Função para gerar relatório de valores ausentes------------------------------------------------
-def relatorio_valores_ausentes(df):
-  """Exibe um relatório detalhado com a quantidade e a porcentagem
-  de valores ausentes (NaN) em cada coluna do DataFrame.
-  """
-  total_linhas = len(df)
-  qtd_ausentes = df.isna().sum()
-  pct_ausentes = (qtd_ausentes / total_linhas) * 100
-
-  # Cria um DataFrame de resumo
-  resumo = pd.DataFrame(
-      {"Qtd_Ausentes": qtd_ausentes, "%_Ausentes": pct_ausentes}
-  )
-
-  # Filtra apenas colunas que possuem pelo menos 1 ausente e ordena da maior para menor %
-  resumo_filtrado = resumo[resumo["Qtd_Ausentes"] > 0].sort_values(
-      by="%_Ausentes", ascending=False
-  )
-
-  print(f"Total de linhas na base: {total_linhas}")
-  if not resumo_filtrado.empty:
-    print("\nColunas com valores ausentes:")
-    print(resumo_filtrado.to_string())
-  else:
-    print("\nNenhuma coluna possui valores ausentes.")
-
-  return resumo
-
-
-# Função para padronizar placeholders nulos----------------------------------------------------
-def padronizar_placeholders_nulos(df):
-  """Converte strings que representam erros/ausência (como '#N/D', 'NULL', 'NA', '')
-
-  em valores NaN reais do Pandas, permitindo que a normalização de tipos funcione.
-  """
-  df_padrao = df.copy()
-  termos_nulos = ["#n/d", "#n/a", "n/d", "n/a", "na", "null", "none", ""]
-
-  for col in df_padrao.columns:
-    if df_padrao[col].dtype == "object":
-      # Converte para string, remove espaços extras e joga para minúsculo para comparar
-      serie_str = df_padrao[col].astype(str).str.strip().str.lower()
-      # Substitui os termos da lista por np.nan
-      df_padrao[col] = serie_str.replace(termos_nulos, np.nan)
-
-  return df_padrao
-
-# Função para tratar valores ausentes em uma coluna específica--------------------------------
-def tratar_ausentes(
-    df, coluna, estrategia="constante", valor_constante="desconhecido"
-):
-  """Trata valores ausentes em uma coluna específica com base na estratégia escolhida:
-  - 'mediana': preenche com a mediana (para colunas numéricas)
-  - 'moda': preenche com o valor mais frequente
-  - 'temporal': preenche usando forward fill / backward fill (para datas/séries)
-  - 'constante': preenche com um valor fixo (ex: 'desconhecido' ou 0)
-  """
-  df_tratado = df.copy()
-
-  if coluna not in df_tratado.columns:
-    print(f"Aviso: Coluna '{coluna}' não foi encontrada no DataFrame.")
-    return df_tratado
-
-  nulos_antes = df_tratado[coluna].isna().sum()
-  if nulos_antes == 0:
-    print(f"A coluna '{coluna}' não possui valores ausentes para tratar.")
-    return df_tratado
-
-  if estrategia == "mediana":
-    if pd.api.types.is_numeric_dtype(df_tratado[coluna]):
-      val = df_tratado[coluna].median()
-      df_tratado[coluna] = df_tratado[coluna].fillna(val)
-      print(f"Coluna '{coluna}': {nulos_antes} nulos preenchidos pela mediana ({val}).")
-    else:
-      print(f"Erro: Coluna '{coluna}' não é numérica para calcular mediana.")
-
-  elif estrategia == "moda":
-    val = df_tratado[coluna].mode()[0]
-    df_tratado[coluna] = df_tratado[coluna].fillna(val)
-    print(f"Coluna '{coluna}': {nulos_antes} nulos preenchidos pela moda ({val}).")
-
-  elif estrategia == "temporal":
-    # Propaga o último valor válido para frente e depois para trás
-    df_tratado[coluna] = df_tratado[coluna].ffill().bfill()
-    print(f"Coluna '{coluna}': {nulos_antes} nulos tratados via preenchimento temporal.")
-
-  elif estrategia == "constante":
-    df_tratado[coluna] = df_tratado[coluna].fillna(valor_constante)
-    print(f"Coluna '{coluna}': {nulos_antes} nulos preenchidos com a constante '{valor_constante}'.")
-
-  return df_tratado
-
-
-# Função para normalizar os dados do DataFrame-----------------------------------------------------
-def normalizar_dados(df):
-  """Recebe um DataFrame e executa a normalização completa:
-  - Padroniza os nomes das colunas (minúsculas, sem espaços, underscores).
-  - Remove espaços em branco de strings.
-  - Identifica e converte colunas numéricas (trata R$, pontos de milhar e vírgulas decimais).
-  - Identifica e converte colunas de data usando um dicionário de formatos conhecidos.
-  Retorna o DataFrame normalizado.
-  """
-  df_norm = df.copy()
-
-  print("Iniciando a normalização dos dados...")
-
-  # 1. Normalizar nomes das colunas
-  df_norm.columns = (
-      df_norm.columns.str.strip().str.lower().str.replace(" ", "_")
-  )
-
-  # 2. Normalizar colunas de texto (string) básicas
-  colunas_texto = df_norm.select_dtypes(include=["object", "string"]).columns
-  for col in colunas_texto:
-    df_norm[col] = df_norm[col].apply(
-        lambda x: x.strip() if isinstance(x, str) else x
-    )
-
-  # 3. Tratamento de colunas numéricas mascaradas como texto (ex: valores monetários)
-  print("Verificando e limpando colunas numéricas...")
-  for col in df_norm.columns:
-    if df_norm[col].dtype == "object":
-      amostra = df_norm[col].dropna()
-      amostra_str = amostra[amostra.apply(lambda x: isinstance(x, str))]
-
-      if len(amostra_str) > 0:
-        # Simula a limpeza do padrão monetário/numérico brasileiro (R$, pontos e vírgulas)
-        teste_limpeza = (
-            amostra_str.str.replace("R$", "", regex=False)
-            .str.replace(" ", "")
-            .str.replace(".", "", regex=False)  # Remove ponto de milhar
-            .str.replace(
-                ",", ".", regex=False
-            )  # Troca vírgula decimal por ponto
-        )
-
-        try:
-          convertido = pd.to_numeric(teste_limpeza, errors="coerce")
-          # Se mais de 80% da amostra se converteu com sucesso em número
-          if convertido.notna().sum() / len(amostra_str) > 0.8:
-            df_norm[col] = (
-                df_norm[col]
-                .astype(str)
-                .str.replace("R$", "", regex=False)
-                .str.replace(" ", "")
-                .str.replace(".", "", regex=False)
-                .str.replace(",", ".", regex=False)
-            )
-            df_norm[col] = pd.to_numeric(df_norm[col], errors="coerce")
-            print(f" - Coluna '{col}' convertida para numérica com sucesso.")
-        except Exception:
-          pass
-
-  # 4. Dicionário de formatos de data conhecidos
-  formatos_data = {
-      "dd/mm/aaaa": "%d/%m/%Y",
-      "dd/mm/aa": "%d/%m/%y",
-      "aaaa-mm-dd": "%Y-%m-%d",
-      "aa-mm-dd": "%y-%m-%d",
-      "dd-mm-aaaa": "%d-%m-%Y",
-      "dd-mm-aa": "%d-%m-%y",
-      "mm/dd/aaaa": "%m/%d/%Y",
-      "mm/dd/aa": "%m/%d/%y",
-      "dd.mm.aaaa": "%d.%m.%Y",
-  }
-
-  # Atualiza a lista de colunas de texto após conversões numéricas eventuais
-  colunas_texto = df_norm.select_dtypes(include=["object", "string"]).columns
-
-  print("Analisando e convertendo colunas de data...")
-  for col in colunas_texto:
-    amostra = df_norm[col].dropna()
-    # Filtra APENAS valores que são strings para evitar erros de tipo no formato
-    amostra_str = amostra[amostra.apply(lambda x: isinstance(x, str))]
-
-    if len(amostra_str) == 0:
-      continue
-
-    convertido_com_sucesso = False
-    for desc_formato, formato_str in formatos_data.items():
-      try:
-        convertido = pd.to_datetime(
-            amostra_str, format=formato_str, errors="coerce"
-        )
-        taxa_sucesso = convertido.notna().sum() / len(amostra_str)
-
-        if taxa_sucesso > 0.8:
-          df_norm[col] = pd.to_datetime(
-              df_norm[col], format=formato_str, errors="coerce"
-          )
-          print(
-              f" - Coluna '{col}' convertida para datetime usando o formato"
-              f" '{desc_formato}'."
-          )
-          convertido_com_sucesso = True
-          break
-      except Exception:
-        continue
-
-    # Fallback genérico caso nenhum formato rígido bata
-    if not convertido_com_sucesso:
-      try:
-        convertido_geral = pd.to_datetime(amostra_str, errors="coerce")
-        if convertido_geral.notna().sum() / len(amostra_str) > 0.8:
-          df_norm[col] = pd.to_datetime(df_norm[col], errors="coerce")
-          print(
-              f" - Coluna '{col}' convertida para datetime usando inferência"
-              " padrão."
-          )
-      except Exception:
-        pass
-
-  print("Normalização concluída com sucesso!")
-  return df_norm
-
-# Para complementar criei esta função para identifica dados repetidos que podem ser pais provavel no dataframe
-def relatorio_colunas_pai(df):
-  """Analisa um DataFrame para identificar prováveis colunas 'pai'
-  com base na cardinalidade, taxa de repetição e dependência funcional
-  de atributos associados.
-  """
-  n_linhas = len(df)
-  relatorio = []
-
-  for col in df.columns:
-    n_unicos = df[col].nunique()
-    taxa_unicidade = (n_unicos / n_linhas) * 100
-    media_repeticao = n_linhas / n_unicos if n_unicos > 0 else 0
-
-    # Calcula a dependência funcional: quantas outras colunas do DataFrame
-    # possuem valor único (constante) dentro de cada grupo desta coluna.
-    # Ex: Para 'cl_id', colunas como 'cl_genero' devem ter 1 único valor por cliente.
-    atributos_dependentes = 0
-    if 1 < n_unicos < n_linhas:
-      for outra_col in df.columns:
-        if outra_col == col:
-          continue
-        # Verifica se o valor é constante por grupo (máximo de valores únicos por grupo == 1)
-        if df.groupby(col)[outra_col].nunique().max() == 1:
-          atributos_dependentes += 1
-
-    relatorio.append({
-        "coluna": col,
-        "n_unicos": n_unicos,
-        "unicidade_pct": round(taxa_unicidade, 2),
-        "media_linhas_por_pai": round(media_repeticao, 2),
-        "atributos_dependentes": atributos_dependentes,
-    })
-
-  df_resultado = pd.DataFrame(relatorio)
-
-  # Ordena priorizando colunas que possuem atributos dependentes (perfil de entidade pai)
-  # e uma taxa de unicidade intermediária (nem 100% único, nem valor único).
-  df_resultado = df_resultado.sort_values(
-      by=["atributos_dependentes", "unicidade_pct"], ascending=[False, True]
-  )
-
-  return df_resultado.reset_index(drop=True)
-
-
-# Função para analisar estatísticas de métricas agrupadas por entidade pai--------------------------------
-def analisar_estatisticas_pai(df, col_pai, col_metrica=None):
-  """Isola as entidades pai únicas e gera estatísticas automáticas.
-
-  Se 'col_metrica' for informada, analisa apenas ela. Caso contrário,
-  varre todas as colunas numéricas do DataFrame.
-  """
-  # Isola a entidade pai removendo duplicidades baseadas no ID pai
-  df_pai = df.drop_duplicates(subset=[col_pai])
-
-  # Define se analisa uma coluna específica ou varre todas as numéricas
-  if col_metrica is not None:
-    if col_metrica not in df.columns:
-      raise ValueError(f"A coluna '{col_metrica}' não existe no DataFrame.")
-    colunas_metricas = [col_metrica]
-  else:
-    colunas_metricas = df_pai.select_dtypes(
-        include=["number", "int64", "float64"]
-    ).columns.tolist()
-    if col_pai in colunas_metricas:
-      colunas_metricas.remove(col_pai)
-
-  resultados = {}
-
-  print(f"=== Relatório Estatístico dos Filhos por Pai: '{col_pai}' ===")
-  print(
-      f"Total de entidades pai únicas ({col_pai}):"
-      f" {fmt_int(len(df_pai))}\n"
-  )
-
-  for col in colunas_metricas:
-    filhos = df_pai[col]
-
-    # Tratamento seguro para a moda (evita listagem excessiva de valores únicos)
-    moda_vals = filhos.mode()
-    total_unicos = filhos.nunique()
-
-    if len(moda_vals) > 10 or (
-        total_unicos > 0 and len(moda_vals) > (total_unicos * 0.5)
-    ):
-      str_moda = "N/A (Alta dispersão / Sem moda clara)"
-    else:
-      str_moda = ", ".join(map(str, moda_vals.tolist()))
-
-    contagem = filhos.count()
-    media = filhos.mean() if contagem > 0 else 0
-    mediana = filhos.median() if contagem > 0 else 0
-    desvio_padrao = filhos.std() if contagem > 1 else 0
-    maximo = filhos.max() if contagem > 0 else 0
-    minimo = filhos.min() if contagem > 0 else 0
-
-    print(f"--- Métrica: {col} ---")
-    print(f"Contagem:       {fmt_int(contagem)}")
-    print(f"Média:          {media:.3f}")
-    print(f"Mediana:        {mediana:.3f}")
-    print(
-        f"Desvio padrão:  {desvio_padrao:.3f}"
-        if pd.notna(desvio_padrao)
-        else "Desvio padrão:  0.000"
-    )
-    print(f"Moda:           {str_moda}")
-    print(f"Máximo:         {maximo}")
-    print(f"Mínimo:         {minimo}\n")
-
-    resultados[col] = {
-        "contagem": contagem,
-        "media": media,
-        "mediana": mediana,
-        "std": desvio_padrao,
-        "moda": moda_vals.tolist(),
-        "max": maximo,
-        "min": minimo,
-    }
-
-  return resultados
-
 # ---------------------------------------------------------------------
-# 1. LOCALIZAÇÃO E LEITURA DO ARQUIVO (ONLINE OU OFFLINE)
+# 1. LOCALIZAÇÃO E LEITURA DO ARQUIVO
 # ---------------------------------------------------------------------
-
 folderScript = Path(__file__).resolve().parent
 
-# Aceita os três nomes mais prováveis para facilitar a execução.
 arquivos_candidatos = [
     folderScript / "Base Varejo.csv",
     folderScript / "BaseVarejo.csv",
     folderScript / "Varejo.csv"
 ]
 
-# Tenta localizar o arquivo CSV localmente
 arquivo_csv_local = next((p for p in arquivos_candidatos if p.exists()), None)
-
-# URL do arquivo CSV hospedado no GitHub  
 file_url = "https://raw.githubusercontent.com/g-opec/sctech/refs/heads/master/Miniprojeto_GenezMattos_Visualizacao_de_Dados_e_Business_Intelligence_%5BT4%5D/data/nao_processado/BaseVarejo.csv"
 
 print("\n" + "=" * 72)
 
-# Se o arquivo foi encontrado localmente, lê do disco
 if arquivo_csv_local is not None:
     print(f"Arquivo local encontrado: {arquivo_csv_local.name}. Carregando...")
-    df = pd.read_csv(arquivo_csv_local, sep=";", encoding="utf-8")
+    df = pd.read_csv(arquivo_csv_local, sep=";", encoding="utf-8", na_values=["#N/D", "#n/d", "NULL", "NA", ""])
     print("Sucesso! O DataFrame local foi carregado corretamente.")
-
-# Se não foi encontrado localmente, tenta ler diretamente da URL do GitHub
 else:
-    print("Arquivo CSV não foi encontrado localmente. Tentando ler diretamente da URL do GitHub...")
+    print("Arquivo CSV não encontrado localmente. Tentando ler diretamente da URL do GitHub...")
     print("=" * 72)
     try:
-        df = pd.read_csv(file_url, sep=";", encoding="utf-8")
+        df = pd.read_csv(file_url, sep=";", encoding="utf-8", na_values=["#N/D", "#n/d", "NULL", "NA", ""])
         print("Sucesso! O DataFrame foi carregado corretamente da URL do GitHub.")
     except Exception as e:
         print("Falha ao carregar o arquivo.")
-        print("Verifique se a URL está correta, se o repositório é público ou se o arquivo existe.")
         print(f"Detalhes técnicos do erro: {e}")
 
 csv_name = arquivo_csv_local.name if arquivo_csv_local else "erro"  
@@ -460,118 +44,300 @@ print("=" * 72)
 print("1. ESTRUTURA INICIAL DO DATAFRAME")
 print("=" * 72)
 print(f"Arquivo: {csv_name}")
-print(f"Número de registros: {fmt_int(len(df))}")
+print(f"Número de registros: {int(len(df)):,}".replace(",", "."))
 print(f"Número de colunas: {df.shape[1]}")
 print("\nColunas:")
 for coluna in df.columns:
     print(f" - {coluna}")
 
+print("-" * 72)
 print("\nTipos de dados iniciais:")
 print(df.dtypes)
 
 # ---------------------------------------------------------------------
 # 2. DIAGNÓSTICO DE QUALIDADE
 # ---------------------------------------------------------------------
-
 print("\n" + "=" * 72)
 print("2. DIAGNÓSTICO DE QUALIDADE")
 print("=" * 72)
 
 print("\nValores nulos por coluna:")
 print(df.isna().sum())
-print("\n" + "=" * 72)
+print("\n")
 
-# Conta quantas linhas têm 100% dos valores nulos
 qtd_linhas_totalmente_vazias = df.isna().all(axis=1).sum()
-
 print(f"Quantidade de linhas 100% vazias: {qtd_linhas_totalmente_vazias}")
-print("=" * 72)
 
+# ---------------------------------------------------------------------
+# 3. TRATAMENTO DE DADOS
+# ---------------------------------------------------------------------
 print("\n" + "=" * 72)
 print("3. TRATAMENTO DE DADOS")
 print("=" * 72)
 
-# 1. Chamando a função de limpeza strutural inicial (remove colunas e linhas totalmente vazias e linhas duplicadas)
-df_clean = limpar_dados(df)
+# Limpeza estrutural
+df_clean = df.copy()
+print(f"Dimensões antes da limpeza: {df_clean.shape[0]} linhas, {df_clean.shape[1]} colunas.")
 
-# 2. converte textos de erro ("#N/D", "NULL") em NaN reais
-df_com_nulos_reais = padronizar_placeholders_nulos(df_clean)
+colunas_vazias = [col for col in df_clean.columns if df_clean[col].isna().all()]
+if colunas_vazias:
+    print(f"Removendo {len(colunas_vazias)} coluna(s) totalmente vazia(s):")
+    for coluna in colunas_vazias:
+        print(f" - {coluna}")
+    df_clean = df_clean.drop(columns=colunas_vazias)
+else:
+    print("Nenhuma coluna 100% vazia encontrada.")
 
-# 3. chamando a função do relatório para inspecionar os ausentes antes de tratar
-relatorio_valores_ausentes(df_com_nulos_reais)
+linhas_antes = len(df_clean)
+df_clean = df_clean.dropna(how="all")
+linhas_removidas = linhas_antes - len(df_clean)
 
-# 4. função para tratar colunas específicas conforme análise do relatório
-df_com_nulos_reais = tratar_ausentes(df_com_nulos_reais, coluna="PR_CAT", estrategia="constante", valor_constante="Sem Categoria")
-df_com_nulos_reais = tratar_ausentes(df_com_nulos_reais, coluna="PR_NOME", estrategia="constante", valor_constante="Produto não informado")
+if linhas_removidas > 0:
+    print(f"Removidas {linhas_removidas} linha(s) totalmente vazia(s).")
+else:
+    print("Nenhuma linha 100% vazia encontrada.")
 
-# caso fosse necessário tratar a coluna de valores monetários, poderia ser feito assim:
-#df_tratado = tratar_ausentes(df_com_nulos_reais, coluna="valor_venda", estrategia="mediana")
+qtd_duplicadas = df_clean.duplicated().sum()
+print(f"Quantidade de linhas duplicadas: {qtd_duplicadas}")
+if qtd_duplicadas > 0:
+    print(f"Removendo {qtd_duplicadas} linha(s) duplicada(s).") 
+    df_clean = df_clean.drop_duplicates()
 
-# caso fosse necessario tratar a coluna de datas, poderia ser feito assim:
-#df_tratado = tratar_ausentes(df_com_nulos_reais, coluna="DATA", estrategia="temporal")
+print(f"Dimensões após a limpeza: {df_clean.shape[0]} linhas, {df_clean.shape[1]} colunas.\n")
 
-### só substituindo o df_com_nulos_reais pelo df_tratado se houver necessidade de tratar mais colunas
+# Padronização de placeholders nulos
+df_com_nulos_reais = df_clean.copy()
+termos_nulos = ["#n/d", "#n/a", "n/d", "n/a", "na", "null", "none", ""]
+
+for col in df_com_nulos_reais.columns:
+    if df_com_nulos_reais[col].dtype == "object":
+        serie_str = df_com_nulos_reais[col].astype(str).str.strip().str.lower()
+        mask = serie_str.isin(termos_nulos)
+        df_com_nulos_reais.loc[mask, col] = np.nan
+
+print("-" * 72)
+
+# Relatório de valores ausentes
+total_linhas = len(df_com_nulos_reais)
+qtd_ausentes = df_com_nulos_reais.isna().sum()
+pct_ausentes = (qtd_ausentes / total_linhas) * 100
+resumo = pd.DataFrame({"Qtd_Ausentes": qtd_ausentes, "%_Ausentes": pct_ausentes})
+resumo_filtrado = resumo[resumo["Qtd_Ausentes"] > 0].sort_values(by="%_Ausentes", ascending=False)
+
+print(f"Total de linhas na base: {total_linhas}")
+if not resumo_filtrado.empty:
+    print("\nColunas com valores ausentes:")
+    print(resumo_filtrado.to_string())
+else:
+    print("\nNenhuma coluna possui valores ausentes.")
+
+print("-" * 72)
+
+# Tratamento de colunas específicas (constantes)
+for coluna, valor_constante in [("PR_CAT", "Sem Categoria"), ("PR_NOME", "Produto não informado")]:
+    if coluna in df_com_nulos_reais.columns:
+        nulos_antes = df_com_nulos_reais[coluna].isna().sum()
+        if nulos_antes > 0:
+            df_com_nulos_reais[coluna] = df_com_nulos_reais[coluna].fillna(valor_constante)
+            print(f"Coluna '{coluna}': {nulos_antes} nulos preenchidos com a constante '{valor_constante}'.")
+
 df_tratado = df_com_nulos_reais.copy()
 
-# 5. chamando a função de normalização de dataframe
-df_normalized = normalizar_dados(df_tratado)
+print("-" * 72)
 
-# 6. chamando a função do relatório para confirmar que não há mais ausentes após o tratamento e normalização
-print("\n" + "Segunda inspeção de valores ausentes após o tratamento e normalização:")
-relatorio_valores_ausentes(df_normalized)
+# Normalização
+print("Iniciando a normalização dos dados...")
+df_normalized = df_tratado.copy()
+df_normalized.columns = df_normalized.columns.str.strip().str.lower().str.replace(" ", "_")
 
+for col in df_normalized.select_dtypes(include=["object", "string"]).columns:
+    df_normalized[col] = df_normalized[col].apply(lambda x: x.strip() if isinstance(x, str) else x)
+
+print("Verificando e limpando colunas numéricas...")
+for col in df_normalized.columns:
+    if df_normalized[col].dtype == "object":
+        amostra = df_normalized[col].dropna()
+        amostra_str = amostra[amostra.apply(lambda x: isinstance(x, str))]
+
+        if len(amostra_str) > 0:
+            teste_limpeza = (
+                amostra_str.str.replace("R$", "", regex=False)
+                .str.replace(" ", "")
+                .str.replace(".", "", regex=False)
+                .str.replace(",", ".", regex=False)
+            )
+
+            try:
+                convertido = pd.to_numeric(teste_limpeza, errors="coerce")
+                if convertido.notna().sum() / len(amostra_str) > 0.8:
+                    df_normalized[col] = (
+                        df_normalized[col].astype(str)
+                        .str.replace("R$", "", regex=False)
+                        .str.replace(" ", "")
+                        .str.replace(".", "", regex=False)
+                        .str.replace(",", ".", regex=False)
+                    )
+                    df_normalized[col] = pd.to_numeric(df_normalized[col], errors="coerce")
+                    print(f" - Coluna '{col}' convertida para numérica com sucesso.")
+            except Exception:
+                pass
+
+formatos_data = {
+    "dd/mm/aaaa": "%d/%m/%Y", "dd/mm/aa": "%d/%m/%y", "aaaa-mm-dd": "%Y-%m-%d",
+    "aa-mm-dd": "%y-%m-%d", "dd-mm-aaaa": "%d-%m-%Y", "dd-mm-aa": "%d-%m-%y",
+    "mm/dd/aaaa": "%m/%d/%Y", "mm/dd/aa": "%m/%d/%y", "dd.mm.aaaa": "%d.%m.%Y",
+}
+
+print("Analisando e convertendo colunas de data...")
+for col in df_normalized.select_dtypes(include=["object", "string"]).columns:
+    amostra = df_normalized[col].dropna()
+    amostra_str = amostra[amostra.apply(lambda x: isinstance(x, str))]
+
+    if len(amostra_str) == 0:
+        continue
+
+    convertido_com_sucesso = False
+    for desc_formato, formato_str in formatos_data.items():
+        try:
+            convertido = pd.to_datetime(amostra_str, format=formato_str, errors="coerce")
+            if convertido.notna().sum() / len(amostra_str) > 0.8:
+                df_normalized[col] = pd.to_datetime(df_normalized[col], format=formato_str, errors="coerce")
+                print(f" - Coluna '{col}' convertida para datetime usando o formato '{desc_formato}'.")
+                convertido_com_sucesso = True
+                break
+        except Exception:
+            continue
+
+    if not convertido_com_sucesso:
+        try:
+            convertido_geral = pd.to_datetime(amostra_str, format='mixed', errors="coerce")
+            if convertido_geral.notna().sum() / len(amostra_str) > 0.8:
+                df_normalized[col] = pd.to_datetime(df_normalized[col], format='mixed', errors="coerce")
+                print(f" - Coluna '{col}' convertida para datetime usando inferência padrão.")
+        except Exception:
+            pass
+
+print("Normalização concluída com sucesso!")
+
+print("-" * 72)
+print("\nSegunda inspeção de valores ausentes após o tratamento e normalização:")
+total_linhas_norm = len(df_normalized)
+qtd_ausentes_norm = df_normalized.isna().sum()
+pct_ausentes_norm = (qtd_ausentes_norm / total_linhas_norm) * 100
+resumo_norm = pd.DataFrame({"Qtd_Ausentes": qtd_ausentes_norm, "%_Ausentes": pct_ausentes_norm})
+resumo_filtrado_norm = resumo_norm[resumo_norm["Qtd_Ausentes"] > 0].sort_values(by="%_Ausentes", ascending=False)
+
+print(f"Total de linhas na base: {total_linhas_norm}")
+if not resumo_filtrado_norm.empty:
+    print("\nColunas com valores ausentes:")
+    print(resumo_filtrado_norm.to_string())
+else:
+    print("\nNenhuma coluna possui valores ausentes.")
+
+print("-" * 72)
+print("\nTipos de dados após normalização:")
+print(df_normalized.dtypes)
+
+# ---------------------------------------------------------------------
+# 4. ESTATISTICAS DESCRITIVAS
+# ---------------------------------------------------------------------
 print("\n" + "=" * 72)
 print("4. ESTATISTICAS DESCRITIVAS")
 print("=" * 72)
 
+print("\nAnálise de colunas prováveis 'pai' com base na cardinalidade, taxa de repetição e dependência funcional:")
+n_linhas_df = len(df_normalized)
+relatorio_pai = []
 
-print("\n" + "analise de colunas prováveis 'pai' com base na cardinalidade, taxa de repetição e dependência funcional:")
-df_analise = relatorio_colunas_pai(df_normalized)
+for col in df_normalized.columns:
+    n_unicos = df_normalized[col].nunique()
+    taxa_unicidade = (n_unicos / n_linhas_df) * 100
+    media_repeticao = n_linhas_df / n_unicos if n_unicos > 0 else 0
+
+    atributos_dependentes = 0
+    if 1 < n_unicos < n_linhas_df:
+        for outra_col in df_normalized.columns:
+            if outra_col == col:
+                continue
+            if df_normalized.groupby(col)[outra_col].nunique().max() == 1:
+                atributos_dependentes += 1
+
+    relatorio_pai.append({
+        "coluna": col,
+        "n_unicos": n_unicos,
+        "unicidade_pct": round(taxa_unicidade, 2),
+        "media_linhas_por_pai": round(media_repeticao, 2),
+        "atributos_dependentes": atributos_dependentes,
+    })
+
+df_analise = pd.DataFrame(relatorio_pai)
+df_analise = df_analise.sort_values(by=["atributos_dependentes", "unicidade_pct"], ascending=[False, True]).reset_index(drop=True)
 print(df_analise)
 print("\n")
 
-estatisticas = analisar_estatisticas_pai(df_normalized, col_pai="cl_id", col_metrica="cl_fhl")
+print("-" * 72)
+# Estatísticas da entidade pai 'cl_id' para a métrica 'cl_fhl'
+col_pai = "cl_id"
+col_metrica = "cl_fhl"
+df_pai = df_normalized.drop_duplicates(subset=[col_pai])
+filhos = df_pai[col_metrica]
 
+moda_vals = filhos.mode()
+total_unicos = filhos.nunique()
+
+if len(moda_vals) > 10 or (total_unicos > 0 and len(moda_vals) > (total_unicos * 0.5)):
+    str_moda = "N/A (Alta dispersão / Sem moda clara)"
+    moda_lista = []
+else:
+    str_moda = ", ".join(map(str, moda_vals.tolist()))
+    moda_lista = moda_vals.tolist()
+
+contagem = filhos.count()
+media = filhos.mean() if contagem > 0 else 0
+mediana = filhos.median() if contagem > 0 else 0
+desvio_padrao = filhos.std() if contagem > 1 else 0
+maximo = filhos.max() if contagem > 0 else 0
+minimo = filhos.min() if contagem > 0 else 0
+
+print(f"=== Relatório Estatístico dos Filhos por Pai: '{col_pai}' ===")
+print(f"Total de entidades pai únicas ({col_pai}): {int(len(df_pai)):,}".replace(",", ".") + "\n")
+print(f"--- Métrica: {col_metrica} ---")
+print(f"Contagem:       {int(contagem):,}".replace(",", "."))
+print(f"Média:          {media:.3f}")
+print(f"Mediana:        {mediana:.3f}")
+print(f"Desvio padrão:  {desvio_padrao:.3f}" if pd.notna(desvio_padrao) else "Desvio padrão:  0.000")
+print(f"Moda:           {str_moda}")
+print(f"Máximo:         {maximo}")
+print(f"Mínimo:         {minimo}\n")
+
+# ---------------------------------------------------------------------
+# 5. PADRÕES DE AGRUPAMENTOS
+# ---------------------------------------------------------------------
 print("\n" + "=" * 72)
 print("5. PADRÕES DE AGRUPAMENTOS")
 print("=" * 72)
 
-# Agrupamento 1: quantidade de compras por gênero.
-compras_genero = (
-    df_normalized.groupby("cl_genero")["co_id"]
-    .nunique()
-    .sort_values(ascending=False)
-)
-
+compras_genero = df_normalized.groupby("cl_genero")["co_id"].nunique().sort_values(ascending=False)
 print("\n5.1 Quantidade de compras por gênero:")
 print(compras_genero)
 
-
-# Agrupamento 2: quantidade de registros/itens por categoria.
-itens_categoria = (
-    df_normalized.groupby("pr_cat")
-    .size()
-    .sort_values(ascending=False)
-)
-
+itens_categoria = df_normalized.groupby("pr_cat").size().sort_values(ascending=False)
+print("-" * 72)
 print("\n5.2 Quantidade de itens/registros por categoria:")
 print(itens_categoria)
 
-
-# Agrupamento 3: quantidade de compras em que cada categoria apareceu.
-compras_categoria = (
-    df_normalized.pivot_table(index="pr_cat", values="co_id", aggfunc="nunique")
-    .squeeze()  # Converte o DataFrame resultante de 1 coluna em Series
-    .sort_values(ascending=False)
-)
-
+compras_categoria = df_normalized.pivot_table(index="pr_cat", values="co_id", aggfunc="nunique").squeeze().sort_values(ascending=False)
+print("-" * 72)
 print("\n5.3 Quantidade de compras contendo cada categoria:")
 print(compras_categoria)
 
-
+# ---------------------------------------------------------------------
+# 6. CONCLUSÕES E INSIGHTS
+# ---------------------------------------------------------------------
 print("\n" + "=" * 72)
-print("6. CONCLUSOES E INSIGHTS")
+print("6. CONCLUSÕES E INSIGHTS")
 print("=" * 72)
+print("\n")
 
 genero_lider = compras_genero.index[0]
 qtd_genero_lider = int(compras_genero.iloc[0])
@@ -582,27 +348,12 @@ qtd_categoria_lider = int(itens_categoria.iloc[0])
 compras_categoria_lider = compras_categoria.index[0]
 qtd_compras_categoria_lider = int(compras_categoria.iloc[0])
 
-print(
-    f"1. Foram identificadas {fmt_int(removidas)} linhas exatamente duplicadas, "
-    "removidas na etapa de limpeza."
-)
-print(
-    f"2. A categoria com maior quantidade de itens/registros foi "
-    f"'{categoria_lider}', com {fmt_int(qtd_categoria_lider)} ocorrências."
-)
-print(
-    f"3. O gênero com maior número de compras foi '{genero_lider}', "
-    f"com {fmt_int(qtd_genero_lider)} compras."
-)
-print(
-    f"4. A categoria com mais compras foi '{compras_categoria_lider}', "
-    f"com {fmt_int(qtd_compras_categoria_lider)} compras."
-)
-print(#AJUSTAR USANDO "estatisticas"
-    f"5. A base possui {fmt_int(len(df_clientes))} clientes únicos; a média de "
-    f"filhos por cliente é {filhos.mean():.3f} e a moda é "
-    f"{', '.join(map(str, filhos.mode().tolist()))}."
-)
+n_clientes_unicos = contagem
+media_fhl = media
+str_moda_fhl = str_moda if not moda_lista else (str(moda_lista[0]) if len(moda_lista) == 1 else str_moda)
 
-
-
+print(f"1. Foram identificadas {int(qtd_duplicadas):,}".replace(",", ".") + " linhas exatamente duplicadas, removidas na etapa de limpeza.")
+print(f"2. A categoria com maior quantidade de itens/registros foi '{categoria_lider}', com {int(qtd_categoria_lider):,}".replace(",", ".") + " ocorrências.")
+print(f"3. O gênero com maior número de compras foi '{genero_lider}', com {int(qtd_genero_lider):,}".replace(",", ".") + " compras.")
+print(f"4. A categoria com mais compras foi '{compras_categoria_lider}', com {int(qtd_compras_categoria_lider):,}".replace(",", ".") + " compras.")
+print(f"5. A base possui {int(n_clientes_unicos):,}".replace(",", ".") + f" clientes únicos; a média de filhos por cliente é {media_fhl:.3f} e a moda é {str_moda_fhl}.")
