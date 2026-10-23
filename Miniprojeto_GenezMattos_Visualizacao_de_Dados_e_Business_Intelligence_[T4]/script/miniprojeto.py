@@ -26,11 +26,12 @@ def fmt_int(valor):
     return f"{int(valor):,}".replace(",", ".")
 
 
-# Função generica para limpar linhas e colunas vazias do DataFrame-------------------------------
+# Função generica para limpar linhas e colunas vazias e linhas duplicadas do DataFrame-------------------------------
 def limpar_dados(df):
   """Recebe um DataFrame e executa a limpeza estrutural inicial:
   - Remove colunas 100% vazias.
   - Remove linhas 100% vazias.
+  - Remove linhas duplicadas.
   Retorna o DataFrame limpo.
   """
   # Cria uma cópia para evitar modificar o DataFrame original diretamente
@@ -81,7 +82,6 @@ def limpar_dados(df):
 # Função para gerar relatório de valores ausentes------------------------------------------------
 def relatorio_valores_ausentes(df):
   """Exibe um relatório detalhado com a quantidade e a porcentagem
-
   de valores ausentes (NaN) em cada coluna do DataFrame.
   """
   total_linhas = len(df)
@@ -103,7 +103,7 @@ def relatorio_valores_ausentes(df):
     print("\nColunas com valores ausentes:")
     print(resumo_filtrado.to_string())
   else:
-    print("\nParabéns! Nenhuma coluna possui valores ausentes.")
+    print("\nNenhuma coluna possui valores ausentes.")
 
   return resumo
 
@@ -131,7 +131,6 @@ def tratar_ausentes(
     df, coluna, estrategia="constante", valor_constante="desconhecido"
 ):
   """Trata valores ausentes em uma coluna específica com base na estratégia escolhida:
-
   - 'mediana': preenche com a mediana (para colunas numéricas)
   - 'moda': preenche com o valor mais frequente
   - 'temporal': preenche usando forward fill / backward fill (para datas/séries)
@@ -176,7 +175,6 @@ def tratar_ausentes(
 # Função para normalizar os dados do DataFrame-----------------------------------------------------
 def normalizar_dados(df):
   """Recebe um DataFrame e executa a normalização completa:
-
   - Padroniza os nomes das colunas (minúsculas, sem espaços, underscores).
   - Remove espaços em branco de strings.
   - Identifica e converte colunas numéricas (trata R$, pontos de milhar e vírgulas decimais).
@@ -296,6 +294,127 @@ def normalizar_dados(df):
   print("Normalização concluída com sucesso!")
   return df_norm
 
+# Para complementar criei esta função para identifica dados repetidos que podem ser pais provavel no dataframe
+def relatorio_colunas_pai(df):
+  """Analisa um DataFrame para identificar prováveis colunas 'pai'
+  com base na cardinalidade, taxa de repetição e dependência funcional
+  de atributos associados.
+  """
+  n_linhas = len(df)
+  relatorio = []
+
+  for col in df.columns:
+    n_unicos = df[col].nunique()
+    taxa_unicidade = (n_unicos / n_linhas) * 100
+    media_repeticao = n_linhas / n_unicos if n_unicos > 0 else 0
+
+    # Calcula a dependência funcional: quantas outras colunas do DataFrame
+    # possuem valor único (constante) dentro de cada grupo desta coluna.
+    # Ex: Para 'cl_id', colunas como 'cl_genero' devem ter 1 único valor por cliente.
+    atributos_dependentes = 0
+    if 1 < n_unicos < n_linhas:
+      for outra_col in df.columns:
+        if outra_col == col:
+          continue
+        # Verifica se o valor é constante por grupo (máximo de valores únicos por grupo == 1)
+        if df.groupby(col)[outra_col].nunique().max() == 1:
+          atributos_dependentes += 1
+
+    relatorio.append({
+        "coluna": col,
+        "n_unicos": n_unicos,
+        "unicidade_pct": round(taxa_unicidade, 2),
+        "media_linhas_por_pai": round(media_repeticao, 2),
+        "atributos_dependentes": atributos_dependentes,
+    })
+
+  df_resultado = pd.DataFrame(relatorio)
+
+  # Ordena priorizando colunas que possuem atributos dependentes (perfil de entidade pai)
+  # e uma taxa de unicidade intermediária (nem 100% único, nem valor único).
+  df_resultado = df_resultado.sort_values(
+      by=["atributos_dependentes", "unicidade_pct"], ascending=[False, True]
+  )
+
+  return df_resultado.reset_index(drop=True)
+
+
+# Função para analisar estatísticas de métricas agrupadas por entidade pai--------------------------------
+def analisar_estatisticas_pai(df, col_pai, col_metrica=None):
+  """Isola as entidades pai únicas e gera estatísticas automáticas.
+
+  Se 'col_metrica' for informada, analisa apenas ela. Caso contrário,
+  varre todas as colunas numéricas do DataFrame.
+  """
+  # Isola a entidade pai removendo duplicidades baseadas no ID pai
+  df_pai = df.drop_duplicates(subset=[col_pai])
+
+  # Define se analisa uma coluna específica ou varre todas as numéricas
+  if col_metrica is not None:
+    if col_metrica not in df.columns:
+      raise ValueError(f"A coluna '{col_metrica}' não existe no DataFrame.")
+    colunas_metricas = [col_metrica]
+  else:
+    colunas_metricas = df_pai.select_dtypes(
+        include=["number", "int64", "float64"]
+    ).columns.tolist()
+    if col_pai in colunas_metricas:
+      colunas_metricas.remove(col_pai)
+
+  resultados = {}
+
+  print(f"=== Relatório Estatístico dos Filhos por Pai: '{col_pai}' ===")
+  print(
+      f"Total de entidades pai únicas ({col_pai}):"
+      f" {fmt_int(len(df_pai))}\n"
+  )
+
+  for col in colunas_metricas:
+    filhos = df_pai[col]
+
+    # Tratamento seguro para a moda (evita listagem excessiva de valores únicos)
+    moda_vals = filhos.mode()
+    total_unicos = filhos.nunique()
+
+    if len(moda_vals) > 10 or (
+        total_unicos > 0 and len(moda_vals) > (total_unicos * 0.5)
+    ):
+      str_moda = "N/A (Alta dispersão / Sem moda clara)"
+    else:
+      str_moda = ", ".join(map(str, moda_vals.tolist()))
+
+    contagem = filhos.count()
+    media = filhos.mean() if contagem > 0 else 0
+    mediana = filhos.median() if contagem > 0 else 0
+    desvio_padrao = filhos.std() if contagem > 1 else 0
+    maximo = filhos.max() if contagem > 0 else 0
+    minimo = filhos.min() if contagem > 0 else 0
+
+    print(f"--- Métrica: {col} ---")
+    print(f"Contagem:       {fmt_int(contagem)}")
+    print(f"Média:          {media:.3f}")
+    print(f"Mediana:        {mediana:.3f}")
+    print(
+        f"Desvio padrão:  {desvio_padrao:.3f}"
+        if pd.notna(desvio_padrao)
+        else "Desvio padrão:  0.000"
+    )
+    print(f"Moda:           {str_moda}")
+    print(f"Máximo:         {maximo}")
+    print(f"Mínimo:         {minimo}\n")
+
+    resultados[col] = {
+        "contagem": contagem,
+        "media": media,
+        "mediana": mediana,
+        "std": desvio_padrao,
+        "moda": moda_vals.tolist(),
+        "max": maximo,
+        "min": minimo,
+    }
+
+  return resultados
+
 # ---------------------------------------------------------------------
 # 1. LOCALIZAÇÃO E LEITURA DO ARQUIVO (ONLINE OU OFFLINE)
 # ---------------------------------------------------------------------
@@ -368,7 +487,11 @@ qtd_linhas_totalmente_vazias = df.isna().all(axis=1).sum()
 print(f"Quantidade de linhas 100% vazias: {qtd_linhas_totalmente_vazias}")
 print("=" * 72)
 
-# 1. Chamando a função de limpeza strutural inicial (remove colunas e linhas totalmente vazias)
+print("\n" + "=" * 72)
+print("3. TRATAMENTO DE DADOS")
+print("=" * 72)
+
+# 1. Chamando a função de limpeza strutural inicial (remove colunas e linhas totalmente vazias e linhas duplicadas)
 df_clean = limpar_dados(df)
 
 # 2. converte textos de erro ("#N/D", "NULL") em NaN reais
@@ -394,12 +517,92 @@ df_tratado = df_com_nulos_reais.copy()
 df_normalized = normalizar_dados(df_tratado)
 
 # 6. chamando a função do relatório para confirmar que não há mais ausentes após o tratamento e normalização
+print("\n" + "Segunda inspeção de valores ausentes após o tratamento e normalização:")
 relatorio_valores_ausentes(df_normalized)
 
+print("\n" + "=" * 72)
+print("4. ESTATISTICAS DESCRITIVAS")
+print("=" * 72)
+
+
+print("\n" + "analise de colunas prováveis 'pai' com base na cardinalidade, taxa de repetição e dependência funcional:")
+df_analise = relatorio_colunas_pai(df_normalized)
+print(df_analise)
 print("\n")
 
-# Exibe as primeiras linhas para validação
-#print(df.head())
-#print(df_clean.head())
-print(df_normalized.head())
+estatisticas = analisar_estatisticas_pai(df_normalized, col_pai="cl_id", col_metrica="cl_fhl")
+
+print("\n" + "=" * 72)
+print("5. PADRÕES DE AGRUPAMENTOS")
+print("=" * 72)
+
+# Agrupamento 1: quantidade de compras por gênero.
+compras_genero = (
+    df_normalized.groupby("cl_genero")["co_id"]
+    .nunique()
+    .sort_values(ascending=False)
+)
+
+print("\n5.1 Quantidade de compras por gênero:")
+print(compras_genero)
+
+
+# Agrupamento 2: quantidade de registros/itens por categoria.
+itens_categoria = (
+    df_normalized.groupby("pr_cat")
+    .size()
+    .sort_values(ascending=False)
+)
+
+print("\n5.2 Quantidade de itens/registros por categoria:")
+print(itens_categoria)
+
+
+# Agrupamento 3: quantidade de compras em que cada categoria apareceu.
+compras_categoria = (
+    df_normalized.pivot_table(index="pr_cat", values="co_id", aggfunc="nunique")
+    .squeeze()  # Converte o DataFrame resultante de 1 coluna em Series
+    .sort_values(ascending=False)
+)
+
+print("\n5.3 Quantidade de compras contendo cada categoria:")
+print(compras_categoria)
+
+
+print("\n" + "=" * 72)
+print("6. CONCLUSOES E INSIGHTS")
+print("=" * 72)
+
+genero_lider = compras_genero.index[0]
+qtd_genero_lider = int(compras_genero.iloc[0])
+
+categoria_lider = itens_categoria.index[0]
+qtd_categoria_lider = int(itens_categoria.iloc[0])
+
+compras_categoria_lider = compras_categoria.index[0]
+qtd_compras_categoria_lider = int(compras_categoria.iloc[0])
+
+print(
+    f"1. Foram identificadas {fmt_int(removidas)} linhas exatamente duplicadas, "
+    "removidas na etapa de limpeza."
+)
+print(
+    f"2. A categoria com maior quantidade de itens/registros foi "
+    f"'{categoria_lider}', com {fmt_int(qtd_categoria_lider)} ocorrências."
+)
+print(
+    f"3. O gênero com maior número de compras foi '{genero_lider}', "
+    f"com {fmt_int(qtd_genero_lider)} compras."
+)
+print(
+    f"4. A categoria com mais compras foi '{compras_categoria_lider}', "
+    f"com {fmt_int(qtd_compras_categoria_lider)} compras."
+)
+print(#AJUSTAR USANDO "estatisticas"
+    f"5. A base possui {fmt_int(len(df_clientes))} clientes únicos; a média de "
+    f"filhos por cliente é {filhos.mean():.3f} e a moda é "
+    f"{', '.join(map(str, filhos.mode().tolist()))}."
+)
+
+
 

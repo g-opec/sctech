@@ -9,7 +9,7 @@ headers = {'User-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'}
 page = requests.get(url, headers=headers)
 soup = BeautifulSoup(page.content, 'html.parser')
 
-# Correção: Usar find_all para pegar todas as tabelas da página
+# find_all para pegar todas as tabelas da página
 tables_html = soup.find_all('table')
 print(f"Total de tags <table> encontradas: {len(tables_html)}")
 

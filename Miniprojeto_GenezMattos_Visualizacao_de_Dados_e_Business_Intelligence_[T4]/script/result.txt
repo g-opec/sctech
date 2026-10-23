@@ -1,0 +1,196 @@
+
+========================================================================
+Arquivo local encontrado: BaseVarejo.csv. Carregando...
+Sucesso! O DataFrame local foi carregado corretamente.
+========================================================================
+1. ESTRUTURA INICIAL DO DATAFRAME
+========================================================================
+Arquivo: BaseVarejo.csv
+Número de registros: 830.000
+Número de colunas: 14
+
+Colunas:
+ - DATA
+ - CO_ID
+ - CL_ID
+ - CL_GENERO
+ - CL_EC
+ - CL_FHL
+ - CL_SEG
+ - PR_ID
+ - PR_CAT
+ - PR_NOME
+ - Unnamed: 10
+ - Unnamed: 11
+ - Unnamed: 12
+ - Unnamed: 13
+------------------------------------------------------------------------
+
+Tipos de dados iniciais:
+DATA               str
+CO_ID            int64
+CL_ID            int64
+CL_GENERO          str
+CL_EC            int64
+CL_FHL           int64
+CL_SEG             str
+PR_ID            int64
+PR_CAT             str
+PR_NOME            str
+Unnamed: 10    float64
+Unnamed: 11    float64
+Unnamed: 12    float64
+Unnamed: 13    float64
+dtype: object
+
+========================================================================
+2. DIAGNÓSTICO DE QUALIDADE
+========================================================================
+
+Valores nulos por coluna:
+DATA                0
+CO_ID               0
+CL_ID               0
+CL_GENERO           0
+CL_EC               0
+CL_FHL              0
+CL_SEG              0
+PR_ID               0
+PR_CAT           3650
+PR_NOME          3650
+Unnamed: 10    830000
+Unnamed: 11    830000
+Unnamed: 12    830000
+Unnamed: 13    830000
+dtype: int64
+
+
+Quantidade de linhas 100% vazias: 0
+
+========================================================================
+3. TRATAMENTO DE DADOS
+========================================================================
+Dimensões antes da limpeza: 830000 linhas, 14 colunas.
+Removendo 4 coluna(s) totalmente vazia(s):
+ - Unnamed: 10
+ - Unnamed: 11
+ - Unnamed: 12
+ - Unnamed: 13
+Nenhuma linha 100% vazia encontrada.
+Quantidade de linhas duplicadas: 96553
+Removendo 96553 linha(s) duplicada(s).
+Dimensões após a limpeza: 733447 linhas, 10 colunas.
+
+------------------------------------------------------------------------
+Total de linhas na base: 733447
+
+Colunas com valores ausentes:
+         Qtd_Ausentes  %_Ausentes
+PR_CAT           3228    0.440114
+PR_NOME          3228    0.440114
+------------------------------------------------------------------------
+Coluna 'PR_CAT': 3228 nulos preenchidos com a constante 'Sem Categoria'.
+Coluna 'PR_NOME': 3228 nulos preenchidos com a constante 'Produto não informado'.
+------------------------------------------------------------------------
+Iniciando a normalização dos dados...
+Verificando e limpando colunas numéricas...
+Analisando e convertendo colunas de data...
+ - Coluna 'data' convertida para datetime usando o formato 'dd/mm/aaaa'.
+Normalização concluída com sucesso!
+------------------------------------------------------------------------
+
+Segunda inspeção de valores ausentes após o tratamento e normalização:
+Total de linhas na base: 733447
+
+Nenhuma coluna possui valores ausentes.
+------------------------------------------------------------------------
+
+Tipos de dados após normalização:
+data         datetime64[us]
+co_id                 int64
+cl_id                 int64
+cl_genero               str
+cl_ec                 int64
+cl_fhl                int64
+cl_seg                  str
+pr_id                 int64
+pr_cat                  str
+pr_nome                 str
+dtype: object
+
+========================================================================
+4. ESTATISTICAS DESCRITIVAS
+========================================================================
+
+analise de colunas prováveis 'pai' com base na cardinalidade, taxa de repetição e dependência funcional:
+      coluna  n_unicos  unicidade_pct  media_linhas_por_pai  atributos_dependentes
+0      co_id     18471           2.52                 39.71                      6
+1      cl_id      1000           0.14                733.45                      4
+2      pr_id       229           0.03               3202.83                      2
+3    pr_nome       118           0.02               6215.65                      1
+4  cl_genero         2           0.00             366723.50                      0
+5      cl_ec         5           0.00             146689.40                      0
+6     cl_fhl         5           0.00             146689.40                      0
+7     cl_seg         3           0.00             244482.33                      0
+8     pr_cat         7           0.00             104778.14                      0
+9       data       333           0.05               2202.54                      0
+
+
+------------------------------------------------------------------------
+=== Relatório Estatístico dos Filhos por Pai: 'cl_id' ===
+Total de entidades pai únicas (cl_id): 1.000
+
+--- Métrica: cl_fhl ---
+Contagem:       1.000
+Média:          1.136
+Mediana:        0.000
+Desvio padrão:  1.413
+Moda:           0
+Máximo:         4
+Mínimo:         0
+
+
+========================================================================
+5. PADRÕES DE AGRUPAMENTOS
+========================================================================
+
+5.1 Quantidade de compras por gênero:
+cl_genero
+F    9615
+M    8856
+Name: co_id, dtype: int64
+------------------------------------------------------------------------
+
+5.2 Quantidade de itens/registros por categoria:
+pr_cat
+ALIMENTOS        384197
+HIGIENE          137702
+LIMPEZA          128632
+BEBIDAS           38264
+PET               28553
+ACESSORIOS        12871
+Sem Categoria      3228
+dtype: int64
+------------------------------------------------------------------------
+
+5.3 Quantidade de compras contendo cada categoria:
+pr_cat
+ALIMENTOS        18267
+HIGIENE          17610
+LIMPEZA          17475
+BEBIDAS          14735
+PET              13495
+ACESSORIOS        9224
+Sem Categoria     3228
+Name: co_id, dtype: int64
+
+========================================================================
+6. CONCLUSOES E INSIGHTS
+========================================================================
+
+
+1. Foram identificadas 96.553 linhas exatamente duplicadas, removidas na etapa de limpeza.
+2. A categoria com maior quantidade de itens/registros foi 'ALIMENTOS', com 384.197 ocorrências.
+3. O gênero com maior número de compras foi 'F', com 9.615 compras.
+4. A categoria com mais compras foi 'ALIMENTOS', com 18.267 compras.
+5. A base possui 1.000 clientes únicos; a média de filhos por cliente é 1.136 e a moda é 0.
